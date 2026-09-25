@@ -35,8 +35,10 @@ CONFIG_PACKAGE_luci-proto-wireguard=y
 CONFIG_PACKAGE_6in4=y
 CONFIG_PACKAGE_kmod-sit=y
 
-## UPnP.
-CONFIG_PACKAGE_miniupnpd=y
+## UPnP. The feed ships two variants; this build is nftables (firewall4),
+## so request the nftables variant — the plain `miniupnpd` symbol no longer
+## exists in the feed.
+CONFIG_PACKAGE_miniupnpd-nftables=y
 CONFIG_PACKAGE_luci-app-upnp=y
 
 ## Wake-on-LAN.

@@ -55,6 +55,7 @@ jobs:
   stats:
     name: Download stats
     needs: check
+    if: false               # fork: no `stats` branch; the badge counts nothing
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
