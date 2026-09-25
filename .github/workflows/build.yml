@@ -1,9 +1,10 @@
 name: Build
 
-# Builds the edma-nss images for every ipq807x device, in four groups and two
-# flavours (default, and mesh on the 11.4 firmware line):
-#   check (upstream moved?) -> draft release -> build each group -> publish -> prune
+# Builds the edma-nss image for the Xiaomi AX3600 only, default flavour
+# (12.5 NSS firmware — no mesh offload, which needs the 11.4 firmware line):
+#   check (upstream moved?) -> draft release -> build -> publish -> prune
 # All build parameters live in the `env:` block below and in devices/<group>/config.
+# Runs on manual dispatch or push only — no schedule.
 on:
   workflow_dispatch:
   push:
@@ -14,8 +15,6 @@ on:
       - '!devices/ppe-*/**'
       - 'scripts/**'
       - '.github/workflows/build.yml'
-  schedule:
-    - cron: "0 */2 * * *"
 
 concurrency:
   group: build-${{ github.ref }}
@@ -32,7 +31,6 @@ env:
   TARGET: qualcommax/ipq807x
   VARIANT: edma-nss
   RELEASE_PREFIX: edma-nss
-  MESH_RELEASE_PREFIX: edma-nss-mesh
   KEEP: "2"                     # newest releases to retain, per prefix
   FEEDS: "src-git nss https://github.com/JuliusBairaktaris/nss-packages.git;edma-nss"
 
@@ -84,7 +82,6 @@ jobs:
       NSS_SHA: ${{ needs.check.outputs.nss_sha }}
     outputs:
       tag: ${{ steps.draft.outputs.tag }}
-      mesh_tag: ${{ steps.draft.outputs.mesh_tag }}
     steps:
       - id: draft
         run: |
@@ -92,9 +89,9 @@ jobs:
           date=$(date -u +%F)
           stamp=$(date -u +%Y%m%dT%H%M%SZ)
 
-          # One draft per flavour. The build jobs upload into them; each is
-          # published only once every group of both flavours has succeeded, so
-          # a partial image set never goes out.
+          # One draft per build; the build jobs upload into it. Published only
+          # once every group has succeeded, so a partial image set never goes
+          # out.
           draft() {
             local prefix="$1" name="$2" tag
             tag="${prefix}-${stamp}-${GITHUB_RUN_ID}"
@@ -103,21 +100,13 @@ jobs:
               echo "## OpenWrt Build — ${name}"
               echo "- **Date**: $date"
               echo "- **Variant**: \`${name}\`"
-              echo "- **Target**: \`${TARGET}\` (every ipq807x device)"
+              echo "- **Target**: \`${TARGET}\`"
               echo "- **Upstream**: \`${UPSTREAM_REPO}@${UPSTREAM_SHA}\`"
               if [[ -n "${NSS_SHA}" ]]; then
                 echo "- **NSS**: \`${NSS_SHA}\`"
               fi
               echo "- **Trigger**: \`${GITHUB_EVENT_NAME}\`"
               echo
-              if [[ "$prefix" == "$MESH_RELEASE_PREFIX" ]]; then
-                echo "**802.11s mesh offload build.** Same stack as the \`${VARIANT}\`"
-                echo "release of the same date, on NSS firmware 11.4.0.5 — the last"
-                echo "firmware line that accepts a mesh interface — with the ath11k mesh"
-                echo "path/proxy-path offload compiled in. Take this one only if you run"
-                echo "802.11s; the \`${VARIANT}\` release carries the newer 12.5 firmware."
-                echo
-              fi
               echo "Pick the \`...-<your device>-squashfs-sysupgrade.bin\` asset and flash"
               echo "it over an existing OpenWrt install. These are sysupgrade images only -"
               echo "there is no factory image; install stock OpenWrt first if you are not"
@@ -139,13 +128,10 @@ jobs:
             printf '%s\n' "$tag"
           }
 
-          {
-            echo "tag=$(draft "$RELEASE_PREFIX" "$VARIANT")"
-            echo "mesh_tag=$(draft "$MESH_RELEASE_PREFIX" "$MESH_RELEASE_PREFIX")"
-          } >>"$GITHUB_OUTPUT"
+          echo "tag=$(draft "$RELEASE_PREFIX" "$VARIANT")" >>"$GITHUB_OUTPUT"
 
   build:
-    name: Build ${{ matrix.device }} (${{ matrix.flavour }})
+    name: Build ${{ matrix.device }}
     needs: [check, release]
     runs-on: ubuntu-26.04
     timeout-minutes: 360
@@ -154,22 +140,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One entry per devices/<name>/ directory. The ipq807x-* groups exist
-        # because the ath11k memory profile is compile-time and image-wide, so
-        # boards can only share a build when they share a profile.
-        device: [xiaomi_ax3600, ipq807x-1g, ipq807x-512m, ipq807x-256m]
-        # The flavour is a .config fragment on top of the same overlays and the
-        # same source trees; mesh needs the 11.4 firmware, which is image-wide
-        # too, so it cannot share a build with the default flavour either.
-        flavour: [default, mesh]
-        include:
-          - flavour: mesh
-            config_fragment: devices/common/config.mesh
+        # Only the AX3600 is built here; the other ipq807x groups are upstream's
+        # builds for other boards and are not used by this fork.
+        device: [xiaomi_ax3600]
     env:
       GH_TOKEN: ${{ github.token }}
       DEVICE: ${{ matrix.device }}
-      CONFIG_FRAGMENT: ${{ matrix.config_fragment }}
-      TAG: ${{ matrix.flavour == 'mesh' && needs.release.outputs.mesh_tag || needs.release.outputs.tag }}
+      TAG: ${{ needs.release.outputs.tag }}
     steps:
       - name: Install build dependencies
         run: |
@@ -271,10 +248,9 @@ jobs:
           out="openwrt/bin/targets/${TARGET}"
 
           # Sysupgrade images only - no factory/initramfs, per the project's
-          # sysupgrade-from-existing-OpenWrt model. Image names carry the
-          # device, so the four groups never collide in the release. The build
-          # metadata does, so it is uploaded under the group name instead of
-          # dropped - it is the answer to "what exactly was in this image".
+          # sysupgrade-from-existing-OpenWrt model. The build metadata is
+          # uploaded under the group name - it is the answer to "what exactly
+          # was in this image".
           mapfile -t assets < <(find "$out" -maxdepth 1 -type f -name 'openwrt-*-squashfs-sysupgrade.bin')
           [[ ${#assets[@]} -gt 0 ]] || { echo "::error::no sysupgrade images in $out"; exit 1; }
           grep 'sysupgrade.bin' "$out/sha256sums" >"sha256sums-${DEVICE}.txt"
@@ -307,7 +283,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.release.outputs.tag }}
-      MESH_TAG: ${{ needs.release.outputs.mesh_tag }}
       BUILD_RESULT: ${{ needs.build.result }}
     steps:
       - name: Publish or discard
@@ -315,16 +290,12 @@ jobs:
           set -euo pipefail
           if [[ "$BUILD_RESULT" != "success" ]]; then
             # A half-built release would silently be missing devices, and a
-            # draft left behind is never pruned. Drop both and fail. No
+            # draft left behind is never pruned. Drop it and fail. No
             # --cleanup-tag: a draft's tag exists only inside the release.
             gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes
-            gh release delete "$MESH_TAG" --repo "$GITHUB_REPOSITORY" --yes
-            echo "::error::a build group failed ($BUILD_RESULT); draft releases discarded"
+            echo "::error::a build group failed ($BUILD_RESULT); draft release discarded"
             exit 1
           fi
-          # --latest stays on the default flavour: mesh costs the 12.5 firmware
-          # line, so it is the deliberate pick, never the one a link lands on.
-          gh release edit "$MESH_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
 
   prune:
@@ -342,7 +313,4 @@ jobs:
       - name: Prune
         run: |
           set -euo pipefail
-          # Per prefix: the two flavours are separate series, and a shared keep
-          # window would drop one flavour's newest image to hold the other's.
           PREFIX="$RELEASE_PREFIX" bash scripts/prune-releases.sh
-          PREFIX="$MESH_RELEASE_PREFIX" bash scripts/prune-releases.sh
