@@ -4,14 +4,10 @@
 # Concatenated onto devices/common/config by prepare-build.sh.
 #
 
+CONFIG_TARGET_qualcommax_ipq807x=y
 CONFIG_TARGET_qualcommax_ipq807x_DEVICE_xiaomi_ax3600=y
 
-# 512 MB board: the ath11k profile is also forced by kmod-ath11k's NSS block,
-# and the NSS MEDIUM profile replaces the ipq807x default (HIGH), which does
-# not fit here.
-CONFIG_ATH11K_MEM_PROFILE_512M=y
-CONFIG_NSS_MEM_PROFILE_MEDIUM=y
-
+## The QCA9887 IoT radio is not used by this build.
 CONFIG_ATH10K-CT_LEDS=n
 CONFIG_PACKAGE_ath10k-board-qca9887=n
 CONFIG_PACKAGE_ath10k-firmware-qca9887=n
@@ -26,8 +22,8 @@ CONFIG_PACKAGE_kmod-usb-dwc3-qcom=n
 CONFIG_PACKAGE_kmod-usb-xhci-hcd=n
 CONFIG_PACKAGE_kmod-usb3=n
 
-## WireGuard: kernel module + tools + LuCI protocol support.
-CONFIG_PACKAGE_kmod-wireguard=y
+## WireGuard is built into the common config upstream (kmod-wireguard);
+## the tools and the LuCI protocol pages stay a per-board choice here.
 CONFIG_PACKAGE_wireguard-tools=y
 CONFIG_PACKAGE_luci-proto-wireguard=y
 
