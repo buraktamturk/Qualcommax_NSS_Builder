@@ -15,7 +15,7 @@
 # Optional env:
 #   FEEDS         newline-separated `src-git <name> <url>` lines for feeds.conf;
 #                 a name already in feeds.conf replaces that feed (fork stand-in)
-#   CONFIG_FRAGMENT  repo-relative .config fragment appended last (flavour, e.g. mesh)
+#   CONFIG_FRAGMENT  repo-relative .config fragment appended last
 #   COMMON        devices/<COMMON> holding the shared config and overlays (default: common)
 
 set -euo pipefail
@@ -156,9 +156,5 @@ for src in "$COMMON_DIR/files" "$COMMON_DIR/files.$VARIANT" \
   fi
 done
 
-# Lock down sshd_config if shipped.
-if [[ -f files/etc/ssh/sshd_config ]]; then
-  chmod 0600 files/etc/ssh/sshd_config
-fi
 
 log::info "Build environment ready for variant '$VARIANT' on device '$DEVICE'."

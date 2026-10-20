@@ -7,146 +7,107 @@
 [![License](https://img.shields.io/github/license/JuliusBairaktaris/Qualcommax_NSS_Builder?style=flat-square&label=License)](LICENSE)
 [![Last Commit](https://img.shields.io/github/last-commit/JuliusBairaktaris/Qualcommax_NSS_Builder?style=flat-square&label=Last%20Commit)](https://github.com/JuliusBairaktaris/Qualcommax_NSS_Builder/commits/main)
 
-OpenWrt sysupgrade images with PPE and NSS hardware offload (NAT, PPPoE,
-VLAN, SQM, bridge, multicast and Wi-Fi) for every IPQ807x and IPQ60xx board in
-the `qualcommax` target, including the Xiaomi AX3600, Redmi AX6, Linksys
-MX4300 and MR7350, GL.iNet GL-AX1800 Flint and Dynalink DL-WRX36. The images
-run OpenWrt main's upstream `qca_edma`/`qca_ppe` drivers and use only
-in-kernel offload interfaces: no ECM, no NSS qdiscs and no vendor NSS host
-driver. They are built by GitHub Actions from the `ppe-nss` branch of
-[openwrt-ppe-nss](https://github.com/JuliusBairaktaris/openwrt-ppe-nss);
-only the NSS firmware comes from
+OpenWrt sysupgrade images with hardware offload for 41 IPQ807x and 24
+IPQ60xx boards of the `qualcommax` target, built by GitHub Actions from the
+`ppe-nss` branch of
+[openwrt-ppe-nss](https://github.com/JuliusBairaktaris/openwrt-ppe-nss).
+
+The wired traffic (routing, NAT, PPPoE, VLAN, bridging, multicast snooping
+and SQM) runs in the PPE, the packet engine in the SoC's switch, through
+OpenWrt's upstream `qca_edma`/`qca_ppe` drivers and the kernel's own
+offload interfaces. The Wi-Fi data path of the SoC radios runs on the NSS
+cores through `nss-wifi-drv`. There is no ECM, no NSS qdisc and no vendor
+NSS host driver. Only the NSS firmware comes from
 [nss-packages](https://github.com/JuliusBairaktaris/nss-packages).
 
-> [!NOTE]
-> The vendor NSS stack (qca-nss-drv, ECM, NSS qdiscs) is no longer built.
-> Its last `edma-nss-*` releases stay on the releases page, and its build
-> setup is the [`archive/edma-nss-final`](https://github.com/JuliusBairaktaris/Qualcommax_NSS_Builder/tree/archive/edma-nss-final)
-> tag. Moving from `edma-nss` to `ppe-nss` is a normal sysupgrade; see
-> [Coming from edma-nss](#coming-from-edma-nss).
-
-Background and design are in the
-[wiki](https://github.com/JuliusBairaktaris/openwrt-ppe-nss/wiki), starting
-with [PPE and NSS Wi-Fi Offload](https://github.com/JuliusBairaktaris/openwrt-ppe-nss/wiki/PPE-and-NSS-Wi-Fi-Offload).
+How the offload works, how to check it and what is not covered is in the
+[openwrt-ppe-nss wiki](https://github.com/JuliusBairaktaris/openwrt-ppe-nss/wiki).
 
 ## Install
 
-Download `...-<your device>-squashfs-sysupgrade.bin` from a
-[release](https://github.com/JuliusBairaktaris/Qualcommax_NSS_Builder/releases)
-and flash it from LuCI (System → Backup / Flash Firmware) or over ssh:
+Find your router on **[ppenss.github.io](https://ppenss.github.io/)**. It
+links the sysupgrade image of each board, builds custom images with
+packages added or left out, lists the kernel modules of each release and
+explains updates. The images are also on the
+[releases](https://github.com/JuliusBairaktaris/Qualcommax_NSS_Builder/releases)
+page.
 
-```sh
-sysupgrade -n /tmp/openwrt-qualcommax-ipq807x-xiaomi_ax3600-squashfs-sysupgrade.bin
-```
+There is no factory image. Install stock OpenWrt from its
+[device page](https://openwrt.org/toh/start) first, then flash the
+sysupgrade image in LuCI (System → Backup / Flash Firmware). After a fresh
+install, Wi-Fi is off and has no key.
 
-There is no factory image. The device must already run OpenWrt; install stock
-OpenWrt first using its [device page](https://openwrt.org/toh/start).
+Images update themselves with `ppe-update` (System → Firmware update),
+keeping settings and added packages. Kernel modules install with
+`apk add kmod-<name>` from the release's own feed; the official OpenWrt
+kmods do not load. Coming from an `edma-nss` image, follow
+[Migrating from edma-nss](https://github.com/JuliusBairaktaris/openwrt-ppe-nss/wiki/Migrating-from-edma-nss).
 
-| Release | Use it for |
-|---|---|
-| `ppe-nss-*` | The default. NSS firmware 12.5 (`NSS.FW.12.5-210-HK.R` on IPQ807x, `NSS.FW.12.5-210-CP.R` on IPQ60xx). |
-| `ppe-nss-mesh-*` | 802.11s mesh. Same images on NSS firmware 11.4.0.5, the last line that supports mesh. |
-| `ppe-offload-test` | One prerelease, replaced in place. Stock OpenWrt with PPE flowtable offload and no NSS, for testing only. |
-| `edma-nss-*` | Archived vendor NSS stack. No longer built or updated. |
-
-Wi-Fi ships disabled with no key. Connect by cable, set an SSID and key under
-Network → Wireless, and enable the radios.
-
-<details>
-<summary>Devices built: 41 IPQ807x, 24 IPQ60xx</summary>
-
-Boards are grouped by subtarget and RAM.
-
-| Group | RAM | Devices |
-|---|---|---|
-| `xiaomi_ax3600` | 512 MB | Xiaomi AX3600 (adds its wireless defaults and an SQM template) |
-| `ipq807x-1g` | 1 GB+ | Aliyun AP8220, Arcadyan AW1000, Asus RT-AX89X, Buffalo WXR-5950AX12, Dynalink DL-WRX36, Edgecore EAP102, Linksys HomeWRK, Linksys MX4200 v2, Linksys MX4300, Linksys MX5300, Linksys MX8500, Netgear RAX120v2, Netgear RBR750, Netgear RBR850, Netgear RBS750, Netgear RBS850, Netgear SXR80, Netgear SXS80, Netgear WAX620, Netgear WAX630, prpl Haze, QNAP 301w, Spectrum SAX1V1K, TCL LINKHUB HH500V, TP-Link Deco X80-5G, TP-Link EAP620 HD v1, TP-Link EAP660 HD v1, Xiaomi AX9000, Yuncore AX880, Zbtlink ZBT-Z800AX, Zyxel NBG7815, Zyxel NWA110AX, Zyxel NWA210AX |
-| `ipq807x-512m` | 512 MB | CMCC RM2-6, Compex WPQ873, Edimax CAX1800, Linksys MX4200 v1, Redmi AX6, ZTE MF269 |
-| `ipq807x-256m` | 256 MB | Netgear WAX218 |
-| `ipq60xx-1g` | 1 GB+ | Cambium Networks XE3-4, JDCloud RE-CS-02, JDCloud RE-CS-07, Link NN6000 v1, Link NN6000 v2, TP-Link EAP620 HD v2, TP-Link EAP620 HD v3, TP-Link EAP623-Outdoor HD v1 |
-| `ipq60xx-512m` | 512 MB | 8devices Mango DVK, Alfa Network AP120C-AX, GL.iNet GL-AX1800 (Flint), GL.iNet GL-AXT1800 (Slate AX), JDCloud RE-SS-01, Linksys MR7350, Linksys MR7500, Netgear RBR350, Netgear RBS350, Netgear WAX214, Netgear WAX610, Netgear WAX610Y, Qihoo 360V6, TP-Link EAP610-Outdoor, TP-Link EAP625-Outdoor HD v1, Yuncore FAP650 |
-
-The Xiaomi AX3600 is the test device. The IPQ60xx images are new and lightly
-tested, and the maintainer has no IPQ60xx hardware; reports are welcome in the
-[forum thread](https://forum.openwrt.org/t/qualcommax-nss-build/148529).
-The MikroTik Chateau 5G R17 ax is not built because its device tree has no NSS
-node.
-
-</details>
-
-## Status and recovery
-
-The wired offload is the fw4 flowtable, switched on at first boot (Network →
-Firewall → hardware flow offloading). `grep -c HW_OFFLOAD /proc/net/nf_conntrack`
-counts the flows in the PPE.
-
-The NSS Wi-Fi offload is on by default. Turn it off with:
-
-```sh
-uci set nss-wifi.general.offload='0'; uci commit nss-wifi; reboot
-```
-
-The flag is cleared while the offload starts and set again two minutes after
-the firmware has taken the data plane, so a boot that hangs falls back to the
-host Wi-Fi path on the next boot. `logread -e nss-wifi` shows the bring-up.
-
-## Coming from edma-nss
-
-Upgrade with a normal sysupgrade; settings may be kept. The `nss` and
-`nssqos` configs are no longer read. On the Xiaomi AX3600 image the `sqm.wan`
-section is moved from `nss-edma.qos` to `hw_ppe.qos`; on other boards set the
-SQM script to `hw_ppe.qos` in LuCI. `nssqos` DSCP rules are not carried over;
-set up queue classifiers under Network → PPE QoS.
+The Xiaomi AX3600 is the test board. The other boards are built but not
+tested by the maintainer, who has no IPQ60xx hardware. Reports are welcome
+in the [forum thread](https://forum.openwrt.org/t/qualcommax-nss-build/148529).
 
 ## What ships
 
-| Area | Packages |
+| Area | Contents |
 |---|---|
 | Routing, NAT | PPE through the fw4 flowtable: IPv4/IPv6, NAT, PPPoE, 802.1Q VLAN |
-| Bridge, multicast | PPE through switchdev, with multicast snooping |
-| SQM | PPE shaper through tc qdisc offload: `hw_ppe.qos` in `sqm-scripts`, `luci-app-sqm` |
-| QoS classes | `ppe-qos`, `luci-app-ppe-qos` (queue classifiers) |
+| Bridge, multicast | PPE through switchdev, with IGMP/MLD snooping; kernel multicast routing enabled |
+| SQM | PPE shaper through tc offload: `hw_ppe.qos` in `sqm-scripts`, `luci-app-sqm` |
+| QoS classes | `qca-ppe-qos`, `luci-app-qca-ppe-qos`, `dcb`, `tc`, `ethtool-full`, `devlink` |
 | Wi-Fi | `kmod-nss-wifi-drv`: the ath11k data path on the NSS cores, on by default |
 | Base | OpenSSH instead of Dropbear, OpenSSL, LuCI over HTTPS, BCP38, `htop`, `iperf3`, `curl` |
+| Kernel modules | USB storage, TUN and WireGuard built in; ramoops crash logs archived to `/root/pstore` |
 | Toolchain | GCC 15, Binutils 2.46, mold, LTO, PIE/SSP/FORTIFY_SOURCE=3/RELRO |
 
-Routed multicast (IPTV) needs a multicast routing daemon, which is not
-bundled. [docs/CUSTOMIZE.md](docs/CUSTOMIZE.md) shows how to add one.
+First-boot defaults (applied once, kept across upgrades): WAN zone input
+set to DROP, BCP38 on `wan`, LuCI redirected to HTTPS, and the router
+serving NTP to the LAN (DHCP option 42).
+
+Routed multicast (IPTV) needs a daemon such as `igmpproxy`, which is not
+bundled: add it in the image picker, or see
+[docs/CUSTOMIZE.md](docs/CUSTOMIZE.md#routed-multicast).
 
 ## Build it yourself
 
-Fork this repo and edit the `env:` block of
-[build.yml](.github/workflows/build.yml), or build locally:
+Fork this repo and run the Build workflow, or build locally:
 
 ```sh
 git clone --branch ppe-nss https://github.com/JuliusBairaktaris/openwrt-ppe-nss openwrt
+git clone https://github.com/JuliusBairaktaris/Qualcommax_NSS_Builder builder
 cd openwrt
 cp feeds.conf.default feeds.conf
 echo "src-git nss https://github.com/JuliusBairaktaris/nss-packages.git;edma-nss" >> feeds.conf
 sed -i 's|^src-git luci .*|src-git luci https://github.com/JuliusBairaktaris/luci.git;luci-app-ppe-qos|' feeds.conf
 ./scripts/feeds update -a && ./scripts/feeds install -a
-B=../Qualcommax_NSS_Builder
-patch -d feeds/packages -p1 < "$B"/patches/feeds/ppe-nss/packages/0001-*.patch   # hw_ppe.qos
-cat "$B/devices/common/config" "$B/devices/xiaomi_ax3600/config" > .config   # or any devices/<group>
+patch -d feeds/packages -p1 < ../builder/patches/feeds/ppe-nss/packages/0001-*.patch   # hw_ppe.qos
+cat ../builder/devices/common/config ../builder/devices/xiaomi_ax3600/config > .config   # or any devices/<group>
 make defconfig && make -j"$(nproc)"
 ```
 
+`scripts/prepare-build.sh` does all of the above in CI and also copies the
+overlay files from `devices/*/files*` into the image.
+
 > [!IMPORTANT]
-> `ppe-nss` is rebased regularly, so `git pull` does not update it. Use:
+> `ppe-nss` is rebased often, so `git pull` does not update it. Use:
 >
 > ```sh
 > git fetch origin && git reset --hard origin/ppe-nss
-> rm -rf feeds/nss package/feeds/nss
 > ./scripts/feeds update -a && ./scripts/feeds install -a
 > make defconfig
 > ```
 
-[docs/CUSTOMIZE.md](docs/CUSTOMIZE.md) covers build options and overlays.
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the CI pipeline.
+[docs/CUSTOMIZE.md](docs/CUSTOMIZE.md) covers the build options and
+overlays. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the CI
+pipeline.
 
 ## Contributing
 
-Issues and PRs are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
+Issues and PRs are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Bugs in
+the firmware itself belong in the
+[openwrt-ppe-nss issues](https://github.com/JuliusBairaktaris/openwrt-ppe-nss/issues);
+the wiki's [Reporting Bugs](https://github.com/JuliusBairaktaris/openwrt-ppe-nss/wiki/Reporting-Bugs)
+page lists what to include.
 
 ## Acknowledgements
 
@@ -155,12 +116,12 @@ Issues and PRs are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Robert Marko (robimarko)](https://github.com/robimarko) for maintaining the
   OpenWrt qualcommax target.
 - [qosmio](https://github.com/qosmio) for NSS development, the
-  [openwrt-ipq](https://github.com/qosmio/openwrt-ipq) tree and the Wi-Fi
-  offload patches
+  [openwrt-ipq](https://github.com/qosmio/openwrt-ipq) tree and the NSS
+  firmware packaging.
 - [rodriguezst](https://github.com/rodriguezst) for the original
-  [ipq807x-openwrt-builder](https://github.com/rodriguezst/ipq807x-openwrt-builder)
+  [ipq807x-openwrt-builder](https://github.com/rodriguezst/ipq807x-openwrt-builder).
 - The OpenWrt community in the
-  [NSS build thread](https://forum.openwrt.org/t/qualcommax-nss-build/148529)
+  [NSS build thread](https://forum.openwrt.org/t/qualcommax-nss-build/148529).
 
 ## Support
 
